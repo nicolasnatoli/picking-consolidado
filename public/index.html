@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Picking Consolidado</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, "Segoe UI", Arial, sans-serif; background: #f0f2f5; min-height: 100vh; }
+
+    /* HEADER */
+    .header {
+      background: #1A1A2E; color: #fff; padding: 14px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .header-title { font-weight: 800; font-size: 17px; }
+    .header-sub   { font-size: 10px; color: #aaa; margin-top: 2px; }
+    .tabs { display: flex; gap: 6px; }
+    .tab {
+      padding: 7px 14px; border-radius: 20px; border: none; cursor: pointer;
+      font-weight: 700; font-size: 12px; transition: all 0.2s;
+    }
+    .tab.active { background: #C9A84C; color: #1A1A2E; }
+    .tab.inactive { background: rgba(255,255,255,0.12); color: #fff; }
+
+    /* STATUS BAR */
+    .statusbar {
+      background: #fff; border-bottom: 1px solid #e5e7eb;
+      padding: 8px 16px; display: flex; gap: 16px; font-size: 11px;
+      color: #555; flex-wrap: wrap;
+    }
+    .statusbar b { color: #1A1A2E; }
+    .statusbar .ok  { color: #059669; }
+    .statusbar .err { color: #DC2626; }
+    .statusbar .spin { color: #2563EB; }
+
+    /* MAIN */
+    .main { padding: 14px; }
+
+    /* UPLOAD AREA */
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+    .upload-btn {
+      padding: 16px 8px; border-radius: 14px; border: 2.5px dashed;
+      background: #fff; cursor: pointer; text-align: center;
+      font-weight: 700; font-size: 13px; transition: all 0.2s;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .upload-btn:active { transform: scale(0.97); }
+    .upload-btn .icon { font-size: 26px; }
+    .upload-btn.cam   { border-color: #1A1A2E; color: #1A1A2E; }
+    .upload-btn.img   { border-color: #7C3AED; color: #7C3AED; }
+    .upload-btn.pdf   { border-color: #DC2626; color: #DC2626; }
+
+    /* EMPTY STATE */
+    .empty {
+      text-align: center; padding: 48px 24px;
+      background: #fff; border-radius: 14px; border: 1px solid #e5e7eb; color: #9ca3af;
+    }
+    .empty .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty h3 { font-size: 15px; color: #374151; margin-bottom: 6px; }
+    .empty p  { font-size: 13px; line-height: 1.5; }
+
+    /* ORDER CARDS */
+    .order-card {
+      background: #fff; border-radius: 12px; padding: 13px 14px;
+      margin-bottom: 10px; border-left: 4px solid;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+    }
+    .card-top { display: flex; align-items: center; gap: 10px; }
+    .card-badge {
+      min-width: 34px; height: 34px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 12px; color: #fff; flex-shrink: 0;
+    }
+    .card-info { flex: 1; min-width: 0; }
+    .card-name {
+      font-weight: 700; font-size: 13px; color: #1A1A2E;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .card-meta { font-size: 11px; color: #6b7280; margin-top: 2px; }
+    .card-status {
+      font-size: 11px; padding: 3px 9px; border-radius: 20px;
+      font-weight: 700; white-space: nowrap; flex-shrink: 0;
+    }
+    .status-pending  { background: #f3f4f6; color: #6b7280; }
+    .status-reading  { background: #EFF6FF; color: #2563EB; }
+    .status-done     { background: #F0FFF4; color: #059669; }
+    .status-error    { background: #FEF2F2; color: #DC2626; }
+    .card-remove {
+      background: none; border: none; cursor: pointer;
+      font-size: 20px; color: #DC2626; padding: 0 4px; line-height: 1; flex-shrink: 0;
+    }
+    .card-error {
+      margin-top: 8px; background: #FEF2F2; border-radius: 8px;
+      padding: 7px 10px; font-size: 11px; color: #DC2626;
+    }
+    .card-retry {
+      background: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 8px;
+      padding: 3px 10px; font-size: 11px; color: #2563EB; font-weight: 700;
+      cursor: pointer; margin-left: 6px;
+    }
+    .multi-badge {
+      margin-top: 8px; background: #F0FFF4; border-radius: 8px;
+      padding: 6px 10px; font-size: 11px; color: #059669; font-weight: 600;
+    }
+
+    /* EXPORT BTN */
+    .export-btn {
+      width: 100%; padding: 16px; border-radius: 14px; border: none;
+      background: #C9A84C; color: #1A1A2E; font-weight: 900; font-size: 16px;
+      cursor: pointer; margin-top: 14px; transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(201,168,76,0.4);
+    }
+    .export-btn:active { transform: scale(0.98); }
+    .export-btn:disabled { background: #d1d5db; color: #9ca3af; box-shadow: none; cursor: not-allowed; }
+    .export-hint { text-align: center; font-size: 10px; color: #9ca3af; margin-top: 6px; }
+
+    /* TABLE VIEW */
+    .legend {
+      background: #fff; border-radius: 12px; padding: 12px 14px;
+      margin-bottom: 12px; border: 1px solid #e5e7eb;
+    }
+    .legend h4 { font-size: 11px; font-weight: 700; color: #1A1A2E; margin-bottom: 8px; }
+    .legend-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .legend-chip {
+      padding: 3px 10px; border-radius: 20px; font-size: 10px;
+      font-weight: 700; color: #1A1A2E; border: 1px solid rgba(0,0,0,0.08);
+    }
+    .table-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #e5e7eb; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 680px; }
+    thead tr { background: #1A1A2E; color: #fff; }
+    thead th {
+      padding: 9px 8px; text-align: center; font-weight: 700;
+      white-space: nowrap; font-size: 11px; position: sticky; top: 0;
+    }
+    thead th.left { text-align: left; }
+    .zone-banner td {
+      font-weight: 800; font-size: 10px; padding: 5px 12px;
+      color: #fff; letter-spacing: 1.2px; text-transform: uppercase;
+    }
+    .data-row td {
+      padding: 6px 8px; border-bottom: 1px solid rgba(0,0,0,0.05);
+      vertical-align: middle;
+    }
+    .data-row td.num { text-align: right; font-weight: 600; }
+    .data-row td.ctr { text-align: center; }
+    .data-row td.desc { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .grp-dot {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; border-radius: 50%;
+      font-size: 9px; font-weight: 900; color: #fff;
+    }
+
+    /* LOADING OVERLAY */
+    .loading-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(26,26,46,0.8); z-index: 999;
+      align-items: center; justify-content: center; flex-direction: column; gap: 16px;
+    }
+    .loading-overlay.show { display: flex; }
+    .spinner {
+      width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2);
+      border-top-color: #C9A84C; border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { color: #fff; font-weight: 700; font-size: 15px; }
+    .loading-sub  { color: #aaa; font-size: 12px; }
+
+    /* TOAST */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+      background: #1A1A2E; color: #fff; padding: 10px 20px; border-radius: 24px;
+      font-size: 13px; font-weight: 600; z-index: 9999;
+      opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text">Procesando órdenes...</div>
+  <div class="loading-sub" id="loadingSub">Leyendo con Claude Vision</div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Header -->
+<div class="header">
+  <div>
+    <div class="header-title">📦 Picking Consolidado</div>
+    <div class="header-sub">Órdenes de armado → Excel por zona</div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" id="tabOrdenes" onclick="setTab('ordenes')">📷 Órdenes</button>
+    <button class="tab inactive" id="tabTabla"   onclick="setTab('tabla')">📋 Tabla</button>
+  </div>
+</div>
+
+<!-- Status bar -->
+<div class="statusbar" id="statusBar" style="display:none">
+  <span>📄 <b id="stTotal">0</b> archivos</span>
+  <span class="ok">✅ <b id="stDone">0</b> listos</span>
+  <span class="spin" id="stReadingWrap" style="display:none">🔍 <b id="stReading">0</b> leyendo...</span>
+  <span class="err" id="stErrorWrap"   style="display:none">❌ <b id="stError">0</b> con error</span>
+  <span>📦 <b id="stItems">0</b> ítems</span>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- ORDENES TAB -->
+  <div id="viewOrdenes">
+    <div class="upload-grid">
+      <button class="upload-btn cam" onclick="document.getElementById('inputCam').click()">
+        <span class="icon">📷</span> Foto
+      </button>
+      <button class="upload-btn img" onclick="document.getElementById('inputImg').click()">
+        <span class="icon">🖼️</span> Imagen
+      </button>
+      <button class="upload-btn pdf" onclick="document.getElementById('inputPdf').click()">
+        <span class="icon">📄</span> PDF
+      </button>
+    </div>
+
+    <input id="inputCam" type="file" accept="image/*" capture="environment" multiple style="display:none"
+           onchange="handleFiles(this.files)">
+    <input id="inputImg" type="file" accept="image/*,.heic,.heif" multiple style="display:none"
+           onchange="handleFiles(this.files)">
+    <input id="inputPdf" type="file" accept="application/pdf,.pdf" multiple style="display:none"
+           onchange="handleFiles(this.files)">
+
+    <div id="emptyState" class="empty">
+      <div class="icon">📋</div>
+      <h3>Sin órdenes cargadas</h3>
+      <p>Sacá una foto, subí imágenes o PDF de tus órdenes de armado. Podés cargar varias a la vez.</p>
+    </div>
+
+    <div id="ordersList"></div>
+
+    <button class="export-btn" id="exportBtn" disabled onclick="exportExcel()">
+      ⬇️ Descargar Excel
+    </button>
+    <div class="export-hint">El archivo se descarga directamente en tu dispositivo</div>
+  </div>
+
+  <!-- TABLA TAB -->
+  <div id="viewTabla" style="display:none">
+    <div id="tableEmpty" class="empty">
+      <div class="icon">🔍</div>
+      <h3>Sin datos todavía</h3>
+      <p>Cargá órdenes en la pestaña Órdenes para ver el consolidado aquí.</p>
+    </div>
+    <div id="tableContent" style="display:none">
+      <div class="legend">
+        <h4>Grupos procesados:</h4>
+        <div class="legend-chips" id="legendChips"></div>
+      </div>
+      <div class="table-wrap">
+        <table id="dataTable">
+          <thead>
+            <tr>
+              <th>#</th><th>Gr.</th><th>Insumo</th>
+              <th class="left">Descripción</th>
+              <th>Cant.</th><th>U/M</th><th>Ubicación</th>
+              <th>Prod.</th><th>Fecha</th><th>OF</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <button class="export-btn" onclick="exportExcel()" style="margin-top:14px">
+        ⬇️ Descargar Excel
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let orders = [];   // { id, filename, status, data:[], error }
+let currentTab = "ordenes";
+
+const GRP_COLORS = [
+  "#2563EB","#D97706","#059669","#DC2626","#7C3AED",
+  "#0891B2","#65A30D","#DB2777","#EA580C","#0D9488",
+  "#1D4ED8","#B45309","#047857","#B91C1C","#6D28D9",
+  "#0E7490","#4D7C0F","#BE185D","#C2410C","#0F766E"
+];
+const ZONE_NAMES = {
+  0:"ZONA 2P — SEGUNDO PISO", 1:"ZONA 1P — PRIMER PISO",
+  2:"ZONA PB — PLANTA BAJA",  3:"ZONA P  — PASILLOS",
+  4:"ZONA M  — MÓDULOS M",    5:"OTRAS UBICACIONES",    6:"SIN UBICACIÓN"
+};
+const ZONE_BG = {
+  0:"#1E3A5F",1:"#14532D",2:"#3B1F5E",
+  3:"#7C2D12",4:"#374151",5:"#1F1F1F",6:"#333333"
+};
+
+function zoneKey(u) {
+  u = (u||"").trim().toUpperCase();
+  if (!u)              return 6;
+  if (u.startsWith("2P")) return 0;
+  if (u.startsWith("1P")) return 1;
+  if (u.startsWith("PB")) return 2;
+  if (u.startsWith("P"))  return 3;
+  if (u.startsWith("M"))  return 4;
+  return 5;
+}
+
+// ─── TAB ──────────────────────────────────────────────────────────────────────
+function setTab(tab) {
+  currentTab = tab;
+  document.getElementById("viewOrdenes").style.display = tab === "ordenes" ? "" : "none";
+  document.getElementById("viewTabla").style.display   = tab === "tabla"   ? "" : "none";
+  document.getElementById("tabOrdenes").className = "tab " + (tab === "ordenes" ? "active" : "inactive");
+  document.getElementById("tabTabla").className   = "tab " + (tab === "tabla"   ? "active" : "inactive");
+  if (tab === "tabla") renderTable();
+}
+
+// ─── PROCESS FILES ────────────────────────────────────────────────────────────
+async function handleFiles(files) {
+  if (!files || !files.length) return;
+  const arr = Array.from(files);
+
+  // Add pending entries
+  const newEntries = arr.map(f => ({
+    id: Date.now() + Math.random(),
+    file: f,
+    filename: f.name,
+    status: "pending",
+    data: null,
+    error: null
+  }));
+  orders.push(...newEntries);
+  renderOrders();
+
+  // Process each
+  for (const entry of newEntries) {
+    entry.status = "reading";
+    renderOrders();
+
+    try {
+      const formData = new FormData();
+      formData.append("archivos", entry.file);
+
+      const resp = await fetch("/api/procesar", { method: "POST", body: formData });
+      if (!resp.ok) throw new Error(`Error ${resp.status}`);
+      const json = await resp.json();
+
+      entry.data   = json.results;
+      entry.status = "done";
+    } catch(e) {
+      entry.error  = e.message;
+      entry.status = "error";
+    }
+
+    renderOrders();
+  }
+
+  // Reset inputs
+  document.getElementById("inputCam").value = "";
+  document.getElementById("inputImg").value = "";
+  document.getElementById("inputPdf").value = "";
+}
+
+async function retryEntry(id) {
+  const entry = orders.find(o => o.id === id);
+  if (!entry) return;
+  entry.status = "reading"; entry.error = null;
+  renderOrders();
+  try {
+    const formData = new FormData();
+    formData.append("archivos", entry.file);
+    const resp = await fetch("/api/procesar", { method: "POST", body: formData });
+    if (!resp.ok) throw new Error(`Error ${resp.status}`);
+    const json = await resp.json();
+    entry.data = json.results; entry.status = "done";
+  } catch(e) { entry.error = e.message; entry.status = "error"; }
+  renderOrders();
+}
+
+function removeEntry(id) {
+  orders = orders.filter(o => o.id !== id);
+  renderOrders();
+}
+
+// ─── RENDER ORDERS ────────────────────────────────────────────────────────────
+function renderOrders() {
+  const done    = orders.filter(o => o.status === "done").length;
+  const reading = orders.filter(o => o.status === "reading").length;
+  const error   = orders.filter(o => o.status === "error").length;
+  const allRows = getAllRows();
+
+  // Status bar
+  const sb = document.getElementById("statusBar");
+  sb.style.display = orders.length ? "" : "none";
+  document.getElementById("stTotal").textContent   = orders.length;
+  document.getElementById("stDone").textContent    = done;
+  document.getElementById("stReading").textContent = reading;
+  document.getElementById("stError").textContent   = error;
+  document.getElementById("stItems").textContent   = allRows.length;
+  document.getElementById("stReadingWrap").style.display = reading ? "" : "none";
+  document.getElementById("stErrorWrap").style.display   = error   ? "" : "none";
+
+  // Empty state
+  document.getElementById("emptyState").style.display = orders.length ? "none" : "";
+
+  // Export button
+  document.getElementById("exportBtn").disabled = allRows.length === 0;
+
+  // Update tab label
+  document.getElementById("tabTabla").textContent = `📋 Tabla${allRows.length ? ` (${allRows.length})` : ""}`;
+
+  // Cards
+  let grupo = 0;
+  const html = orders.map((entry, idx) => {
+    const ordersInEntry = (entry.data || []).filter(r => !r.error);
+    const grupoStart = grupo + 1;
+    grupo += ordersInEntry.length || 1;
+    const gc = GRP_COLORS[(grupoStart - 1) % GRP_COLORS.length];
+
+    const statusLabel = {
+      pending: ["status-pending","⏳ Pendiente"],
+      reading: ["status-reading","🔍 Leyendo..."],
+      done:    ["status-done",   "✅ Listo"],
+      error:   ["status-error",  "❌ Error"],
+    }[entry.status] || ["status-pending","⏳"];
+
+    const nameText = entry.status === "done" && ordersInEntry.length
+      ? ordersInEntry.map(r => `Prod.${r.order.producto}`).join(" + ")
+      : entry.filename;
+
+    const metaText = entry.status === "done" && ordersInEntry.length
+      ? ordersInEntry.map(r => `OF ${r.order.comprobante} (${(r.order.items||[]).length} ítems)`).join(" · ")
+      : entry.file?.type?.includes("pdf") ? "📄 PDF" : "🖼️ Imagen";
+
+    return `
+      <div class="order-card" style="border-left-color:${gc}">
+        <div class="card-top">
+          <div class="card-badge" style="background:${gc}">${String(grupoStart).padStart(2,"0")}</div>
+          <div class="card-info">
+            <div class="card-name">${nameText}</div>
+            <div class="card-meta">${metaText}</div>
+          </div>
+          <span class="card-status ${statusLabel[0]}">${statusLabel[1]}</span>
+          ${entry.status === "error" ? `<button class="card-retry" onclick="retryEntry(${entry.id})">Reintentar</button>` : ""}
+          <button class="card-remove" onclick="removeEntry(${entry.id})">×</button>
+        </div>
+        ${entry.status === "error" ? `<div class="card-error">⚠️ ${entry.error}</div>` : ""}
+        ${entry.status === "done" && ordersInEntry.length > 1 ? `<div class="multi-badge">📄 Este archivo contiene <b>${ordersInEntry.length}</b> órdenes</div>` : ""}
+      </div>`;
+  }).join("");
+
+  document.getElementById("ordersList").innerHTML = html;
+}
+
+// ─── GET ALL ROWS ─────────────────────────────────────────────────────────────
+function getAllRows() {
+  const rows = [];
+  let grupo = 0;
+  for (const entry of orders) {
+    if (entry.status !== "done" || !entry.data) { grupo++; continue; }
+    for (const r of entry.data) {
+      if (r.error || !r.order) { grupo++; continue; }
+      grupo++;
+      for (const item of (r.order.items || [])) {
+        rows.push({
+          grupo,
+          insumo:      item.insumo      || "",
+          descripcion: item.descripcion || "",
+          cantidad:    item.cantidad    ?? 0,
+          um:          item.um          || "",
+          ubicacion:   item.ubicacion   || "",
+          producto:    r.order.producto || "",
+          fecha:       r.order.fecha    || "",
+          of:          r.order.comprobante || "",
+        });
+      }
+    }
+  }
+  return rows;
+}
+
+function getOrdersInfo() {
+  const info = [];
+  let grupo = 0;
+  for (const entry of orders) {
+    if (entry.status !== "done" || !entry.data) { grupo++; continue; }
+    for (const r of entry.data) {
+      if (r.error || !r.order) { grupo++; continue; }
+      grupo++;
+      info.push({ grupo, producto: r.order.producto, desc: r.order.descripcion_producto,
+                  of: r.order.comprobante, fecha: r.order.fecha });
+    }
+  }
+  return info;
+}
+
+// ─── RENDER TABLE ─────────────────────────────────────────────────────────────
+function renderTable() {
+  const allRows    = getAllRows();
+  const ordersInfo = getOrdersInfo();
+
+  if (!allRows.length) {
+    document.getElementById("tableEmpty").style.display   = "";
+    document.getElementById("tableContent").style.display = "none";
+    return;
+  }
+  document.getElementById("tableEmpty").style.display   = "none";
+  document.getElementById("tableContent").style.display = "";
+
+  // Legend
+  document.getElementById("legendChips").innerHTML = ordersInfo.map(o => `
+    <span class="legend-chip" style="background:${GRP_COLORS[(o.grupo-1)%GRP_COLORS.length]}20;color:#1A1A2E">
+      ${String(o.grupo).padStart(2,"0")} · Prod.${o.producto} · OF ${o.of}
+    </span>`).join("");
+
+  // Sort
+  const sorted = [...allRows].sort((a,b) => {
+    const za = zoneKey(a.ubicacion), zb = zoneKey(b.ubicacion);
+    if (za !== zb) return za - zb;
+    return (a.ubicacion||"").localeCompare(b.ubicacion||"");
+  });
+
+  let lastZone = null, rowN = 0;
+  const html = sorted.map(row => {
+    const zk = zoneKey(row.ubicacion);
+    const gc = GRP_COLORS[(row.grupo-1) % GRP_COLORS.length];
+    const bg = row.grupo % 2 === 0 ? "#ffffff" : "#f9fafb";
+    rowN++;
+
+    let zoneBanner = "";
+    if (zk !== lastZone) {
+      lastZone = zk;
+      zoneBanner = `<tr class="zone-banner"><td colspan="10" style="background:${ZONE_BG[zk]}">▶ ${ZONE_NAMES[zk]}</td></tr>`;
+    }
+
+    return zoneBanner + `
+      <tr class="data-row" style="background:${bg}">
+        <td class="ctr" style="color:#9ca3af;font-size:10px">${String(rowN).padStart(2,"0")}</td>
+        <td class="ctr"><span class="grp-dot" style="background:${gc}">${String(row.grupo).padStart(2,"0")}</span></td>
+        <td class="ctr" style="font-family:monospace;font-size:10px">${row.insumo}</td>
+        <td class="desc">${row.descripcion}</td>
+        <td class="num">${row.cantidad}</td>
+        <td class="ctr" style="color:#6b7280">${row.um}</td>
+        <td class="ctr" style="font-family:monospace;font-weight:700;font-size:10px">${row.ubicacion||"—"}</td>
+        <td class="ctr" style="font-weight:700">${row.producto}</td>
+        <td class="ctr" style="color:#6b7280;white-space:nowrap">${row.fecha}</td>
+        <td class="ctr" style="font-weight:700">${row.of}</td>
+      </tr>`;
+  }).join("");
+
+  document.getElementById("tableBody").innerHTML = html;
+}
+
+// ─── EXPORT ───────────────────────────────────────────────────────────────────
+async function exportExcel() {
+  const allResults = [];
+  let grupo = 0;
+  for (const entry of orders) {
+    if (entry.status !== "done" || !entry.data) { grupo++; continue; }
+    for (const r of entry.data) {
+      grupo++;
+      allResults.push({ grupo, order: r.order, error: r.error });
+    }
+  }
+  if (!allResults.length) return;
+
+  showToast("⏳ Generando Excel...");
+  try {
+    const resp = await fetch("/api/excel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ results: allResults })
+    });
+    if (!resp.ok) throw new Error("Error generando Excel");
+    const blob = await resp.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href     = url;
+    a.download = `Consolidado_Picking_${new Date().toLocaleDateString("es-AR").replace(/\//g,"")}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("✅ Excel descargado");
+  } catch(e) {
+    showToast("❌ " + e.message);
+  }
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 3000);
+}
+</script>
+</body>
+</html>
