@@ -211,4 +211,113 @@ app.post("/api/excel", express.json({ limit: "10mb" }), async (req, res) => {
     c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF2D2D4E" } };
     c.alignment = { horizontal: h === "Descripción" ? "left" : "center", vertical: "middle" };
     c.border = { top:{style:"thin",color:{argb:"FF3D3D6E"}}, bottom:{style:"thin",color:{argb:"FF3D3D6E"}},
-                 left:{style:"thin",color:{argb:"FF3D3D6E"}}, right:{style:"thin",color:{argb:"FF
+                 left:{style:"thin",color:{argb:"FF3D3D6E"}}, right:{style:"thin",color:{argb:"FF3D3D6E"}} };
+  });
+  ws.views = [{ state: "frozen", ySplit: 4 }];
+
+  let currentZone = null, rowNum = 5, dataN = 0;
+  const thinBorder = (color = "CCCCCC") => ({
+    top:{style:"thin",color:{argb:"FF"+color}}, bottom:{style:"thin",color:{argb:"FF"+color}},
+    left:{style:"thin",color:{argb:"FF"+color}}, right:{style:"thin",color:{argb:"FF"+color}}
+  });
+
+  for (const item of allRows) {
+    const zk = zoneKey(item.ubicacion);
+    const gc = GRP_COLORS[(item.grupo - 1) % GRP_COLORS.length];
+    const bg = item.grupo % 2 === 0 ? "FFFFFF" : "F7F7F7";
+
+    if (zk !== currentZone) {
+      currentZone = zk;
+      ws.mergeCells(`A${rowNum}:J${rowNum}`);
+      const zc = ws.getCell(`A${rowNum}`);
+      zc.value = `▶  ${ZONE_NAMES[zk]}`;
+      zc.font = { name: "Arial", bold: true, italic: true, size: 9, color: { argb: "FF" + WHITE } };
+      zc.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + (ZONE_COLORS[zk] || "333333") } };
+      zc.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
+      ws.getRow(rowNum).height = 14;
+      rowNum++;
+    }
+
+    dataN++;
+    const row = ws.getRow(rowNum);
+    row.height = 15;
+
+    const setCell = (col, value, align, bold, color, bgColor, leftAccent) => {
+      const c = row.getCell(col);
+      c.value = value;
+      c.font = { name: "Arial", size: 9, bold: bold || false, color: { argb: "FF" + (color || DARK) } };
+      c.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + (bgColor || bg) } };
+      c.alignment = { horizontal: align || "center", vertical: "middle" };
+      c.border = leftAccent
+        ? { left:{style:"medium",color:{argb:"FF"+gc}}, right:thinBorder().right, top:thinBorder().top, bottom:thinBorder().bottom }
+        : thinBorder();
+    };
+
+    setCell(1,  String(dataN).padStart(2,"0"), "center", false, "888888", "F7F7F7");
+    setCell(2,  String(item.grupo).padStart(2,"0"), "center", true, WHITE, gc);
+    setCell(3,  item.insumo,      "center", false, DARK, bg, true);
+    setCell(4,  item.descripcion, "left",   false, DARK, bg);
+    setCell(5,  item.cantidad,    "right",  true,  DARK, bg);
+    setCell(6,  item.um,          "center", false, "555555", bg);
+    setCell(7,  item.ubicacion || "—", "center", true, DARK, bg);
+    setCell(8,  item.producto,    "center", true,  DARK, bg);
+    setCell(9,  item.fecha,       "center", false, "555555", bg);
+    setCell(10, item.of,          "center", true,  DARK, bg);
+    rowNum++;
+  }
+
+  ws.mergeCells(`A${rowNum}:J${rowNum}`);
+  const pie = ws.getCell(`A${rowNum}`);
+  pie.value = `Total: ${dataN} ítems  ·  ${ordersInfo.length} órdenes  ·  Generado: ${new Date().toLocaleDateString("es-AR")}`;
+  pie.font = { name: "Arial", bold: true, size: 9, color: { argb: "FF" + DARK } };
+  pie.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF" + GOLD } };
+  pie.alignment = { horizontal: "center", vertical: "middle" };
+  ws.getRow(rowNum).height = 16;
+
+  const ws2 = wb.addWorksheet("Resumen");
+  ws2.views = [{ showGridLines: false }];
+  [7,10,36,10,14,8,8].forEach((w,i) => ws2.getColumn(i+1).width = w);
+  ws2.mergeCells("A1:G1");
+  const rs1 = ws2.getCell("A1");
+  rs1.value = "RESUMEN DE ÓRDENES";
+  rs1.font = { name:"Arial", bold:true, size:12, color:{argb:"FF"+WHITE} };
+  rs1.fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FF"+DARK} };
+  rs1.alignment = { horizontal:"center", vertical:"middle" };
+  ws2.getRow(1).height = 22;
+  ["Grupo","Producto","Descripción","OF","Fecha","Ítems"].forEach((h,i) => {
+    const c = ws2.getRow(2).getCell(i+1);
+    c.value = h;
+    c.font = { name:"Arial", bold:true, size:9, color:{argb:"FF"+WHITE} };
+    c.fill = { type:"pattern", pattern:"solid", fgColor:{argb:"FF2D2D4E"} };
+    c.alignment = { horizontal:"center", vertical:"middle" };
+    c.border = thinBorder();
+  });
+  ws2.getRow(2).height = 18;
+  ordersInfo.forEach((o,i) => {
+    const r  = ws2.getRow(i+3);
+    const gc = GRP_COLORS[(o.grupo-1) % GRP_COLORS.length];
+    const bg = i%2===0 ? "F9F9F9" : "FFFFFF";
+    [String(o.grupo).padStart(2,"0"), o.producto, o.desc, o.of, o.fecha, o.items].forEach((v,j) => {
+      const c = r.getCell(j+1);
+      c.value = v;
+      c.font  = { name:"Arial", size:9, bold:j===0, color:{argb: j===0 ? "FF"+WHITE : "FF"+DARK} };
+      c.fill  = { type:"pattern", pattern:"solid", fgColor:{argb: j===0 ? "FF"+gc : "FF"+bg} };
+      c.alignment = { horizontal:"center", vertical:"middle" };
+      c.border = thinBorder();
+    });
+    r.height = 16;
+  });
+
+  const fecha = new Date().toLocaleDateString("es-AR").replace(/\//g,"");
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="Consolidado_Picking_${fecha}.xlsx"`);
+  await wb.xlsx.write(res);
+  res.end();
+});
+
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`✅ Picking app corriendo en puerto ${PORT}`));
